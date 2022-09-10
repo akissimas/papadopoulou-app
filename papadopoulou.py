@@ -160,7 +160,7 @@ class MainWindow(QMainWindow):
 
     def setup_ui(self):
         self.setWindowTitle("Papadopoulou app")
-        self.setWindowIcon(QIcon('images/logo.ico'))
+        self.setWindowIcon(QIcon('images/logo.png'))
         self.setGeometry(400, 400, 500, 300)
         self.setFixedSize(518, 350)
 
@@ -348,6 +348,7 @@ class MainWindow(QMainWindow):
     def read_from_file():
         try:
             with open('auto_field_completion.txt', 'r') as reader:
+                # data_from_file = [line[:-1] for line in reader]  # strip the newline by hand
                 data_from_file = [line.rstrip() for line in reader]
                 return data_from_file
         except FileNotFoundError:
