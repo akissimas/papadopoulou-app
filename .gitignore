@@ -1,5 +1,6 @@
 /build/
 /dist/
 /venv/
+/.idea/
 /auto_field_completion.txt
 papadopoulou.spec
