@@ -1,15 +1,15 @@
 import random
 import sys
-import time
+from time import sleep
 from MyRequest import MyRequest
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QLineEdit, QPushButton, QLabel, \
-    QHBoxLayout, QGridLayout, QStyleFactory, QPlainTextEdit, QMessageBox
+    QHBoxLayout, QGridLayout, QStyleFactory, QPlainTextEdit, QMessageBox, QGroupBox
 
 BUTTON_SIZE_X = 640
 BUTTON_SIZE_Y = 480
-LINE_EDIT_WIDTH = 150
+LINE_EDIT_WIDTH = 120
 
 
 # Step 1: Create a worker class
@@ -18,54 +18,62 @@ class Worker(QObject):
     worker_complete = pyqtSignal(int)
     error_message = pyqtSignal(str)
 
-    def __init__(self, my_request, reps, pause_btn_reps):
+    def __init__(self, my_request, reps, pause_btn_reps, pause_after_reps):
         super(Worker, self).__init__()
         self.my_request = my_request
         self.reps = reps
         self.pause_btn_reps = pause_btn_reps
+        self.pause_after_reps = pause_after_reps
         self.flag = False
 
     def run(self):
-        i = 0
-        for i in range(self.reps):
+        counter = 0
+        while not self.flag:
+            for i in range(self.reps):
+                if self.flag:
+                    break
+
+                # send request
+                error = self.my_request.send_request()
+
+                # print error message if exception occurrence
+                if error == 0:
+                    self.error_message.emit('Invalid URL')
+                    self.worker_complete.emit(counter)
+                    return
+                elif error == 1:
+                    self.error_message.emit('missing/invalid Schema')
+                    self.worker_complete.emit(counter)
+                    return
+                elif error == 2:
+                    self.error_message.emit('connection/HTTP error')
+                    self.worker_complete.emit(counter)
+                    return
+
+                self.update_progress.emit(self.my_request.get_result(counter + 1))
+
+                counter += 1
+
+                # in the last rep don't use sleep
+                if i == self.reps - 1:
+                    break
+                sleep(random.uniform(self.pause_btn_reps, self.pause_btn_reps + 3))
+
             if self.flag:
                 break
+            sleep(random.uniform(self.pause_after_reps, self.pause_after_reps + 3))
 
-            # send request
-            error = self.my_request.send_request()
-
-            # print error message if exception occurrence
-            if error == 0:
-                self.error_message.emit('Invalid URL')
-                self.worker_complete.emit(i)
-                return
-            elif error == 1:
-                self.error_message.emit('missing/invalid Schema')
-                self.worker_complete.emit(i)
-                return
-            elif error == 2:
-                self.error_message.emit('connection/HTTP error')
-                self.worker_complete.emit(i)
-                return
-
-            self.update_progress.emit(self.my_request.get_result(i + 1))
-
-            # in the last rep don't use sleep
-            if i == self.reps - 1:
-                break
-
-            time.sleep(random.uniform(self.pause_btn_reps, self.pause_btn_reps + 2))
 
         # if you press the stop button before loop ends
         if self.flag:
             # reset flag
             self.flag = False
             # how many requests were made
-            self.worker_complete.emit(i)
+            self.worker_complete.emit(counter)
             return
 
         # how many requests were made
-        self.worker_complete.emit(i + 1)
+        self.worker_complete.emit(counter + 1)
 
     def stop(self):
         self.flag = True
@@ -85,7 +93,7 @@ class MainWindow(QMainWindow):
 
         # total requests
         if self.data_from_file[8]:
-            self.total_requests += int(self.data_from_file[8])
+            self.total_requests += int(self.data_from_file[9])
 
         # url
         self.url_label = QLabel("url:")
@@ -120,12 +128,20 @@ class MainWindow(QMainWindow):
             self.num_of_reps_field.setText(self.data_from_file[6])
 
         # pause between repetitions
-        self.pause_of_reps_label = QLabel("pause between reps.:")
+        self.pause_of_reps_label = QLabel("pause time between reps:")
         self.pause_of_reps_field = QLineEdit(self.data_from_file[7])
         if self.data_from_file[7] == '':
             self.pause_of_reps_field.setText(str(0))
         else:
             self.pause_of_reps_field.setText(self.data_from_file[7])
+
+        # pause after repetitions
+        self.pause_after_reps_label = QLabel("pause after reps:")
+        self.pause_after_reps_field = QLineEdit(self.data_from_file[8])
+        if self.data_from_file[8] == '':
+            self.pause_after_reps_field.setText(str(0))
+        else:
+            self.pause_after_reps_field.setText(self.data_from_file[8])
 
         # logs area
         self.logs = QPlainTextEdit()
@@ -162,10 +178,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Papadopoulou app")
         self.setWindowIcon(QIcon('images/logo.png'))
         self.setGeometry(400, 400, 500, 300)
-        self.setFixedSize(518, 350)
+        self.setFixedSize(680, 480)
 
         # url
-        url_layout = self.create_field(self.url_label, self.url_field, 200, QHBoxLayout())
+        url_layout = self.create_field(self.url_label, self.url_field, 250, QHBoxLayout())
 
         # write your answer
         answer_layout = self.create_field(self.answer_label, self.answer_field, LINE_EDIT_WIDTH, QHBoxLayout())
@@ -183,12 +199,16 @@ class MainWindow(QMainWindow):
         email_layout = self.create_field(self.email_label, self.email_field, LINE_EDIT_WIDTH, QHBoxLayout())
 
         # number of repetitions
-        num_of_reps_layout = self.create_field(self.num_of_reps_label, self.num_of_reps_field, LINE_EDIT_WIDTH,
+        num_of_reps_layout = self.create_field(self.num_of_reps_label, self.num_of_reps_field, 30,
                                                QHBoxLayout())
 
         # pause between repetitions
-        pause_of_reps_layout = self.create_field(self.pause_of_reps_label, self.pause_of_reps_field, LINE_EDIT_WIDTH,
+        pause_of_reps_layout = self.create_field(self.pause_of_reps_label, self.pause_of_reps_field, 30,
                                                  QHBoxLayout())
+
+        # pause after repetitions
+        pause_after_reps_layout = self.create_field(self.pause_after_reps_label, self.pause_after_reps_field, 30,
+                                                    QHBoxLayout())
 
         # logs area
         self.logs.setReadOnly(True)
@@ -206,23 +226,40 @@ class MainWindow(QMainWindow):
         # set layout
         layout = QGridLayout()
 
+        # set top groupBox
+        top_groupbox = QGroupBox()
+        layout.addWidget(top_groupbox)
+
+        top_layout = QGridLayout()
+        top_groupbox.setLayout(top_layout)
+
         # url
-        layout.addLayout(url_layout, 0, 0)
+        top_layout.addLayout(url_layout, 0, 1, alignment=Qt.AlignHCenter)
 
         # answer
-        layout.addLayout(answer_layout, 1, 0)
+        top_layout.addLayout(answer_layout, 1, 1, alignment=Qt.AlignHCenter)
+
         # elements
-        layout.addLayout(name_layout, 2, 0)
-        layout.addLayout(surname_layout, 2, 1)
-        layout.addLayout(phone_layout, 3, 0)
-        layout.addLayout(email_layout, 3, 1)
-        layout.addLayout(num_of_reps_layout, 4, 0)
-        layout.addLayout(pause_of_reps_layout, 4, 1)
+        top_layout.addLayout(name_layout, 2, 0, alignment=Qt.AlignHCenter)
+        top_layout.addLayout(surname_layout, 2, 2)
+        top_layout.addLayout(phone_layout, 3, 0, alignment=Qt.AlignHCenter)
+        top_layout.addLayout(email_layout, 3, 2)
+        top_layout.addLayout(num_of_reps_layout, 4, 0)
+        top_layout.addLayout(pause_of_reps_layout, 4, 1)
+        top_layout.addLayout(pause_after_reps_layout, 4, 2)
+
+        # set bottom groupBox
+        bottom_groupbox = QGroupBox()
+        layout.addWidget(bottom_groupbox)
+
+        bottom_layout = QGridLayout()
+        bottom_groupbox.setLayout(bottom_layout)
+
         # logs
-        layout.addWidget(self.logs, 6, 0, 2, 2)
+        bottom_layout.addWidget(self.logs, 0, 0, 1, 3)
         # buttons
-        layout.addLayout(buttons_layout, 8, 1)
-        layout.addWidget(self.save_btn, 8, 0)
+        bottom_layout.addWidget(self.save_btn, 1, 0)
+        bottom_layout.addLayout(buttons_layout, 1, 2)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -231,12 +268,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def create_field(label, field, size, Qlayout):
-        label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         field.setFixedWidth(size)
 
         layout = Qlayout
-        layout.addWidget(label)
-        layout.addWidget(field)
+        layout.addWidget(label, alignment=Qt.AlignRight)
+        layout.addWidget(field, alignment=Qt.AlignLeft)
 
         return layout
 
@@ -259,7 +295,7 @@ class MainWindow(QMainWindow):
         # Step 2: Create a QThread object
         self.thread = QThread()
         # Step 3: Create a worker object
-        self.worker = Worker(my_request, int(values_of_reps[0]), int(values_of_reps[1]))
+        self.worker = Worker(my_request, int(values_of_reps[0]), int(values_of_reps[1]), int(values_of_reps[2]))
         # Step 4: Move worker to the thread
         self.worker.moveToThread(self.thread)
         # Step 5: Connect signals and slots
@@ -301,7 +337,7 @@ class MainWindow(QMainWindow):
                 self.surname_field.text(), self.phone_field.text(),
                 self.email_field.text()]
 
-        values_of_reps = [self.num_of_reps_field.text(), self.pause_of_reps_field.text()]
+        values_of_reps = [self.num_of_reps_field.text(), self.pause_of_reps_field.text(), self.pause_after_reps_field.text()]
 
         return data, values_of_reps
 
@@ -315,14 +351,14 @@ class MainWindow(QMainWindow):
         for index in values_of_reps:
             if not index.isnumeric():
                 QMessageBox.information(self, 'Missing data',
-                                        f'Fields ({self.num_of_reps_label.text()}) and ({self.pause_of_reps_label.text()}) must be only numbers and greater than 0',
+                                        f'Fields ({self.num_of_reps_label.text()}), ({self.pause_of_reps_label.text()}) and ({self.pause_after_reps_label.text()}) must be only numbers and greater than 0',
                                         QMessageBox.Ok)
                 return True
 
         # if last fields have values of 0
-        if int(values_of_reps[0]) == 0 or int(values_of_reps[1]) == 0:
+        if int(values_of_reps[0]) == 0 or int(values_of_reps[1]) == 0 or int(values_of_reps[2]) == 0:
             QMessageBox.information(self, 'Missing data',
-                                    f'Fields ({self.num_of_reps_label.text()}) and ({self.pause_of_reps_label.text()}) must be only numbers and greater than 0',
+                                    f'Fields ({self.num_of_reps_label.text()}), ({self.pause_of_reps_label.text()}) and ({self.pause_after_reps_label.text()}) must be only numbers and greater than 0',
                                     QMessageBox.Ok)
             return True
 
@@ -344,11 +380,12 @@ class MainWindow(QMainWindow):
 
             writer.write(str(self.total_requests))
 
+        QMessageBox.information(self, 'Save', "Preset saved", QMessageBox.Ok)
+
     @staticmethod
     def read_from_file():
         try:
             with open('auto_field_completion.txt', 'r') as reader:
-                # data_from_file = [line[:-1] for line in reader]  # strip the newline by hand
                 data_from_file = [line.rstrip() for line in reader]
                 return data_from_file
         except FileNotFoundError:
