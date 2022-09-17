@@ -91,9 +91,6 @@ class MainWindow(QMainWindow):
 
         self.data_from_file = self.read_from_file()
 
-        # total requests
-        if self.data_from_file[8]:
-            self.total_requests += int(self.data_from_file[9])
 
         # url
         self.url_label = QLabel("url:")
@@ -142,6 +139,10 @@ class MainWindow(QMainWindow):
             self.pause_after_reps_field.setText(str(0))
         else:
             self.pause_after_reps_field.setText(self.data_from_file[8])
+
+        # total requests
+        if self.data_from_file[9]:
+            self.total_requests += int(self.data_from_file[9])
 
         # logs area
         self.logs = QPlainTextEdit()
@@ -389,7 +390,7 @@ class MainWindow(QMainWindow):
                 data_from_file = [line.rstrip() for line in reader]
                 return data_from_file
         except FileNotFoundError:
-            return [''] * 8 + ['0']
+            return [''] * 9 + ['0']
 
     def closeEvent(self, event=None):
         self.stop_button_pressed()
